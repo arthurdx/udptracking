@@ -4,7 +4,7 @@ import struct
 import numpy as np
 
 # Server address and port
-server_address = ('ip_host', 9999)
+server_address = ('localhost', 9999)
 
 # Create a socket
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
