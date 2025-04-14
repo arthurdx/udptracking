@@ -22,6 +22,7 @@ while True:
     frame = cv2.imdecode(np.frombuffer(buffer, dtype=np.uint8), cv2.IMREAD_COLOR)
     
     # Display the frame
+    cv2.putText(frame, 'Human Detected', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
     cv2.imshow('Video', frame)
     
     if cv2.waitKey(1) & 0xFF == ord('q'):
