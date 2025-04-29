@@ -3,10 +3,18 @@ import socket
 import struct
 import sys
 import threading
+from datetime import datetime
+import logging
 import numpy as np
 from ultralytics import YOLO
 
 MOVEMENT_THRESHOLD = 5
+
+logging.basicConfig(
+    filename='./logs/server.log',
+    level=logging.INFO,
+    format='%(asctime)s - %(message)s'
+)
 
 if len(sys.argv) < 1:
     print("Usage: python udp_server.py <video_file_path> or 0 for webcam")
@@ -17,6 +25,8 @@ if path == '0':
     path = 0
 
 model = YOLO('yolo11n.pt')
+
+frame_id = 0
 
 # Server address and port
 server_address = ('localhost', 9999)
@@ -41,8 +51,13 @@ def human_detected(frame):
 while True:
     ret, frame = video_capture.read()
     if not ret:
+        logging.error("Falha ao capturar frame")
         break
 
+    frame_id += 1
+    timestamp = datetime.now().timestamp()
+
+    
     frame = cv2.flip(frame, 1)
     gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
@@ -59,9 +74,15 @@ while True:
     
         # Send the size of the frameencoded, buffer = cv2.imencode('.jpg', frame)
         size = len(buffer)
-        server_socket.sendto(struct.pack('!I', size), server_address)   
+        server_socket.sendto(struct.pack('!I d I', frame_id, timestamp, size), server_address)   
         # Send the frame
         server_socket.sendto(buffer.tobytes(), server_address)
+
+        logging.info(
+          f'frame_id=#{frame_id} – '
+          f'size={size} bytes – '
+          f'sent_at={timestamp} – '
+        )
     
     prev_frame = gray_frame.copy()
 
