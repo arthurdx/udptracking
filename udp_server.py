@@ -56,10 +56,13 @@ while True:
 
     frame_id += 1
     timestamp = datetime.now().timestamp()
-
     
     frame = cv2.flip(frame, 1)
     gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+    encoded, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 30]) 
+    
+    size = len(buffer)
 
     if prev_frame is not None:
         frame_diff = cv2.absdiff(prev_frame, gray_frame)
@@ -69,22 +72,28 @@ while True:
             prev_frame = gray_frame.copy()
             continue
 
-    if human_detected(frame):
-        encoded, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 30]) 
-    
-        # Send the size of the frameencoded, buffer = cv2.imencode('.jpg', frame)
-        size = len(buffer)
+    # to do
+    # comparar o processamento e tempo de execução com e sem sumarização
+    # armazenar todos os frames gerados para fins de comparação
+
+
+    detected_human = human_detected(frame)
+    if detected_human:
+        
         server_socket.sendto(struct.pack('!I d I', frame_id, timestamp, size), server_address)   
         # Send the frame
         server_socket.sendto(buffer.tobytes(), server_address)
 
-        logging.info(
-          f'frame_id=#{frame_id} – '
-          f'size={size} bytes – '
-          f'sent_at={timestamp} – '
-        )
+
     
     prev_frame = gray_frame.copy()
+
+    logging.info(
+        f'frame_id=#{frame_id} '
+        f'size={size} bytes '
+        f'sent_at={timestamp} '
+        f'was_sent={detected_human} '
+    )
 
 
 video_capture.release()
