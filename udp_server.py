@@ -4,17 +4,23 @@ import struct
 import sys
 import threading
 from datetime import datetime
+from pythonjsonlogger import jsonlogger
 import logging
 import numpy as np
 from ultralytics import YOLO
 
-MOVEMENT_THRESHOLD = 5
+MOVEMENT_THRESHOLD = 3.8
 
-logging.basicConfig(
-    filename='./logs/server.log',
-    level=logging.INFO,
-    format='%(asctime)s - %(message)s'
-)
+log_filename = datetime.now().strftime("./logs/server_%Y%m%d_%H%M%S.ndjson")
+
+logger = logging.getLogger("udp_server")
+logger.setLevel(logging.INFO)
+
+log_handler = logging.FileHandler(log_filename)
+formatter = jsonlogger.JsonFormatter()
+
+log_handler.setFormatter(formatter)
+logger.addHandler(log_handler)
 
 if len(sys.argv) < 1:
     print("Usage: python udp_server.py <video_file_path> or 0 for webcam")
@@ -43,6 +49,8 @@ video_capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 360)
 print("Starting video stream...")
 
 prev_frame = None
+was_processed = None
+detected_human = None
 
 def human_detected(frame):
     results = model.track(frame, persist=True, classes=[0])
@@ -70,14 +78,19 @@ while True:
         if np.mean(frame_diff) < MOVEMENT_THRESHOLD:
             print("No motion - skipping processing")
             prev_frame = gray_frame.copy()
+            logger.info("frame_info", extra = {
+                "frame_id": frame_id,
+                "size_bytes": size,
+                "timestamp": timestamp,
+                "was_processed": False,
+                "was_sent": False
+            })
             continue
+        else:
+            was_processed = True
 
-    # to do
-    # comparar o processamento e tempo de execução com e sem sumarização
-    # armazenar todos os frames gerados para fins de comparação
-
-
-    detected_human = human_detected(frame)
+    if was_processed:
+        detected_human = human_detected(frame)
     if detected_human:
         
         server_socket.sendto(struct.pack('!I d I', frame_id, timestamp, size), server_address)   
@@ -88,12 +101,13 @@ while True:
     
     prev_frame = gray_frame.copy()
 
-    logging.info(
-        f'frame_id=#{frame_id} '
-        f'size={size} bytes '
-        f'sent_at={timestamp} '
-        f'was_sent={detected_human} '
-    )
+    logger.info("frame info", extra={
+    "frame_id": frame_id,
+    "size_bytes": size,
+    "timestamp": timestamp,
+    "was_processed": was_processed,
+    "was_sent": detected_human,
+    })
 
 
 video_capture.release()

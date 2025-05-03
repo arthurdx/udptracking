@@ -3,13 +3,19 @@ import socket
 import struct
 import numpy as np
 import logging
+from pythonjsonlogger import jsonlogger
 from datetime import datetime
 
-logging.basicConfig(
-    filename='./logs/client.log',
-    level=logging.INFO,
-    format='%(asctime)s - %(message)s'
-)
+log_filename = datetime.now().strftime("./logs/client_%Y%m%d_%H%M%S.ndjson")
+
+logger = logging.getLogger("udp_client")
+logger.setLevel(logging.INFO)
+
+log_handler = logging.FileHandler(log_filename)
+formatter = jsonlogger.JsonFormatter()
+
+log_handler.setFormatter(formatter)
+logger.addHandler(log_handler)
 
 # Server address and port
 server_address = ('localhost', 9999)
@@ -45,12 +51,16 @@ while True:
     send_time = datetime.fromtimestamp(timestamp)
     latency = (recv_time - send_time).total_seconds() * 1000  # em milissegundos
     
-    logging.info(
-          f'frame_id={frame_id} – '
-          f'from_server=ip:{server_address[0]}port:{server_address[1]} – '
-          f'size={size} bytes – '
-          f'sent_at={send_time.time()} – '
-          f'latency={latency:.4f} ms')
+    logger.info("frame_info", extra = {
+        "frame_id": frame_id,
+        "timestampMs": timestamp,
+        "recv_timeMs": recv_time.timestamp(),
+        "send_timeMs": send_time.timestamp(),
+        "latencyMs": latency,
+        "size": size,
+    }
+
+    )
 
     # out.write(frame)
 
