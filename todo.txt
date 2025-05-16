@@ -1,0 +1,8 @@
+comparar o processamento e tempo de execução no cenários:
+    1: sem detecção 
+    2: detecção e similaridade de frames
+    3: somente detecção 
+    4: somente similaridade
+    5: codificando todos
+    6: codificando detecções 
+armazenar todos os frames gerados para fins de comparação - ok
