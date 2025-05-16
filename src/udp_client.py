@@ -3,22 +3,30 @@ import socket
 import struct
 import numpy as np
 import logging
-from pythonjsonlogger import JsonFormatter
+from pythonjsonlogger import jsonlogger
+import sys
 from datetime import datetime
 
 logger = logging.getLogger()
 
 logHandler = logging.StreamHandler()
-formatter = JsonFormatter()
+formatter = jsonlogger.JsonFormatter()
 logHandler.setFormatter(formatter)
 logger.addHandler(logHandler)
 
+if len(sys.argv) < 3:
+    print("Usage: python udp_server.py <video_file_path> or 0 for webcam")
+    sys.exit(1)
+
+ip = sys.argv[1]
+port = int(sys.argv[2])
+
 # Server address and port
-server_address = ('192.168.31.250', 9999)
+server_address = (ip, int(port))
 
 # Create a socket
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-client_socket.bind(server_address)
+client_socket.sendto(b"hello", (ip, int(port)))
 
 # salvar o vídeo
 # videoname = datetime.now().strftime("%Y%m%d_%H%M%S")
