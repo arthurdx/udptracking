@@ -34,8 +34,11 @@ def main():
     print(lost_frames)
     loss = (len(lost_frames) / len(client_log)) * 100
     flow = (total_byte_size) / ((server_log[-1]['timestamp'] - server_log[1]['timestamp']) * 1000)
-    print(f"Houve uma perda de {loss:.3f}% dos pacotes\
-    \na vazão da rede foi de {flow:.3f}MBps")
+    latency = sum(line["latencyMs"] for line in client_log) / len(client_log)
+    print(f"Total de patores perdidos {len(lost_frames)}\
+    \nHouve uma perda de {loss:.3f}% dos pacotes\
+    \na vazão da rede foi de {flow:.3f}MBps\
+    \na latência média foi de {latency:.3f}ms")
 
     
 main()
