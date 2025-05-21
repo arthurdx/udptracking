@@ -1,4 +1,4 @@
 .venv/*
 videos/*
-yolo11n.pt
+yolo*
 logs/*
