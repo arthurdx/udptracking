@@ -71,10 +71,10 @@ while True:
 
     # out.write(frame)
 
-    cv2.imshow('Video', frame)
+    # cv2.imshow('Video', frame)
     
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
+    # if cv2.waitKey(1) & 0xFF == ord('q'):
+    #     break
 
 client_socket.close()
 # out.release()

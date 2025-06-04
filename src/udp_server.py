@@ -10,10 +10,24 @@ import numpy as np
 from ultralytics import YOLO
 import psutil
 
+def human_detected(frame):
+    results = model(frame, imgsz=256, classes=[0])
+    return len(results[0].boxes.cls) > 0
+
+
+def encode_and_send(frame, frame_id, timestamp, client_address):
+    encoded, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 30])
+    size = len(buffer)
+    server_socket.sendto(struct.pack('!I d I', frame_id, timestamp, size), client_address)
+    server_socket.sendto(buffer.tobytes(), client_address)
+    
+    return size
+
+
 
 MOVEMENT_THRESHOLD = 5
 DETECT_EVERY_N_FRAMES = 2
-DETECTION_COOLDOWN = 48
+DETECTION_COOLDOWN = 60
 
 mask = DETECT_EVERY_N_FRAMES - 1
 cooldown_timer = 0
@@ -65,10 +79,6 @@ prev_frame = None
 was_processed = None
 detected_human = None
 
-def human_detected(frame):
-    results = model(frame, imgsz=256, classes=[0])
-    return len(results[0].boxes.cls) > 0
-
 while True:
     ret, frame = video_capture.read()
     if not ret:
@@ -96,6 +106,19 @@ while True:
             })
             prev_frame = gray_frame.copy()
             continue
+    
+    if cooldown_timer > 0:
+        cooldown_timer -= 1
+        size = encode_and_send(frame, frame_id, timestamp, client_address)
+        logger.info("'recarregando' a função de processamento", extra={
+            "frame_id": frame_id,
+            "timestamp": timestamp,
+            "size_bytes": size,
+            "processed": False,
+            "sent": True,
+            "cooldown_timer": cooldown_timer
+        })
+        continue
 
     detected = human_detected(frame)
 
@@ -106,19 +129,9 @@ while True:
     mem = process.memory_info().rss                    
     mem_pct = process.memory_percent() 
 
-    if detected or cooldown_timer > 0:
-        if cooldown_timer > 0:
-            cooldown_timer -= 1
-        encoded, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 30]) 
-    
-     
-        size = len(buffer)
-
-        server_socket.sendto(struct.pack('!I d I', frame_id, timestamp, size), client_address)   
- 
-        server_socket.sendto(buffer.tobytes(), client_address)
-
+    if detected:
         
+        size = encode_and_send(frame, frame_id, timestamp, client_address)
 
         logger.info("", extra={
             "frame_id": frame_id,
