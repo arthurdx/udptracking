@@ -8,8 +8,29 @@ from pythonjsonlogger import jsonlogger
 import logging
 import numpy as np
 from ultralytics import YOLO
+import psutil
 
-MOVEMENT_THRESHOLD = 5
+def human_detected(frame):
+    results = model(frame, imgsz=256, classes=[0])
+    return len(results[0].boxes.cls) > 0
+
+
+def encode_and_send(frame, frame_id, timestamp, client_address):
+    encoded, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 30])
+    size = len(buffer)
+    server_socket.sendto(struct.pack('!I d I', frame_id, timestamp, size), client_address)
+    server_socket.sendto(buffer.tobytes(), client_address)
+    
+    return size
+
+
+
+MOVEMENT_THRESHOLD = 1.5
+DETECT_EVERY_N_FRAMES = 2
+DETECTION_COOLDOWN = 60
+
+mask = DETECT_EVERY_N_FRAMES - 1
+cooldown_timer = 0
 
 log_filename = datetime.now().strftime("./logs/server_%Y%m%d_%H%M%S.ndjson")
 
@@ -21,6 +42,8 @@ formatter = jsonlogger.JsonFormatter()
 
 log_handler.setFormatter(formatter)
 logger.addHandler(log_handler)
+
+process = psutil.Process()
 
 
 if len(sys.argv) < 2:
@@ -37,7 +60,6 @@ frame_id = 0
 
 
 
-# Create a socket
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 server_socket.bind(("0.0.0.0", 9999))
 
@@ -46,21 +68,16 @@ _, client_address = server_socket.recvfrom(16)
 print(f"Cliente detectado: {client_address}")
 
 
-# Open a video file or capture from a camera
-video_capture = cv2.VideoCapture(path)  # Change to 0 for webcam
+video_capture = cv2.VideoCapture(path)  
 video_capture.set(cv2.CAP_PROP_FPS, 24)
-video_capture.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-video_capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 360)
+video_capture.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+video_capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 320)
 
 print("Starting video stream...")
 
 prev_frame = None
 was_processed = None
 detected_human = None
-
-def human_detected(frame):
-    results = model.track(frame, persist=True, classes=[0])
-    return len(results[0].boxes.cls) > 0
 
 while True:
     ret, frame = video_capture.read()
@@ -81,52 +98,66 @@ while True:
         if np.mean(frame_diff) < MOVEMENT_THRESHOLD:
             print("No motion - skipping processing")
             prev_frame = gray_frame.copy()
+            logger.info("sem movimento", extra={
+                "frameId": frame_id,
+                "timestamp": timestamp,
+                "processed": False,
+                "sent": False
+            })
+            prev_frame = gray_frame.copy()
             continue
-
-    if human_detected(frame):
-        encoded, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 30]) 
     
-        # Send the size of the frameencoded, buffer = cv2.imencode('.jpg', frame)
-        size = len(buffer)
+    if cooldown_timer > 0:
+        cooldown_timer -= 1
+        size = encode_and_send(frame, frame_id, timestamp, client_address)
+        logger.info("'recarregando' a função de processamento", extra={
+            "frame_id": frame_id,
+            "timestamp": timestamp,
+            "size_bytes": size,
+            "processed": False,
+            "sent": True,
+            "cooldown_timer": cooldown_timer
+        })
+        continue
 
-        if prev_frame is not None:
-            frame_diff = cv2.absdiff(prev_frame, gray_frame)
-            print("Frame difference mean:", np.mean(frame_diff))
-            if np.mean(frame_diff) < MOVEMENT_THRESHOLD:
-                print("No motion - skipping processing")
-                prev_frame = gray_frame.copy()
-                logger.info("frame_info", extra = {
-                    "frame_id": frame_id,
-                    "size_bytes": size,
-                    "timestamp": timestamp,
-                    "was_processed": False,
-                    "was_sent": False
-                })
-                continue
-            else:
-                was_processed = True
+    detected = human_detected(frame)
 
-    if was_processed:
-        detected_human = human_detected(frame)
-    if detected_human:
+    if detected:
+        cooldown_timer = DETECTION_COOLDOWN
 
-        server_socket.sendto(struct.pack('!I d I', frame_id, timestamp, size), client_address)   
-        # Send the frame
-        server_socket.sendto(buffer.tobytes(), client_address)
+    cpu = process.cpu_percent(interval=None)           
+    mem = process.memory_info().rss                    
+    mem_pct = process.memory_percent() 
+
+    if detected:
+        
+        size = encode_and_send(frame, frame_id, timestamp, client_address)
+
+        logger.info("", extra={
+            "frame_id": frame_id,
+            "timestamp": timestamp,
+            "processed": True,
+            "sent": True,
+            "size_bytes": size,
+            "cpu_percent": cpu,
+            "mem_rss_bytes": mem,
+            "mem_percent": mem_pct
+        })
+    else:
+        logger.info("", extra={
+            "frame_id": frame_id,
+            "timestamp": timestamp,
+            "processed": True,
+            "sent": False,
+            "cpu_percent": cpu,
+            "mem_rss_bytes": mem,
+            "mem_percent": mem_pct
+        })
 
 
     prev_frame = gray_frame.copy()
-
-    logger.info("frame info", extra={
-    "frame_id": frame_id,
-    "size_bytes": size,
-    "timestamp": timestamp,
-    "was_processed": was_processed,
-    "was_sent": detected_human,
-    })
     
     
-
 
 video_capture.release()
 server_socket.close()
