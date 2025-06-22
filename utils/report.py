@@ -26,7 +26,7 @@ def main():
             server_log = read_log_file(path_to_logs + filename)
     latency =  -float(client_log[0]['latencyMs'])
     for server_frame in server_log:
-        if server_frame["sent"]:
+        if server_frame["was_sent"]:
             frame_id = server_frame['frame_id']
             total_byte_size += server_frame['size_bytes']
             found = any(frame['frame_id'] == frame_id for frame in client_log)
