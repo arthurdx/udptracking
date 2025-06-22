@@ -6,6 +6,8 @@ import logging
 from pythonjsonlogger import jsonlogger
 from datetime import datetime
 import sys
+import time
+import os
 
 log_filename = datetime.now().strftime("./logs/client_%Y%m%d_%H%M%S.ndjson")
 
@@ -31,7 +33,8 @@ server_address = (ip, int(port))
 # Create a socket
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 client_socket.sendto(b"hello", server_address)
-#client_socket.bind(server_address)
+
+disconnect_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 # salvar o vídeo
 # videoname = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -76,7 +79,27 @@ while True:
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
-client_socket.close()
+time.sleep(1.0)
+client_socket.close() 
+
+disconnect_socket.sendto(b"bye", (ip, int(port)- 1))
+print("Solicitando log do servidor...")
+
+log_data = b""
+while True:
+    size_data, _ = disconnect_socket.recvfrom(4)
+    chunk_size = struct.unpack("!I", size_data)[0]
+    if chunk_size == 0:
+        break
+    chunk, _ = disconnect_socket.recvfrom(chunk_size)
+    log_data += chunk  
+
+os.makedirs("./logs", exist_ok=True)
+with open(log_filename.replace("client", "server"), "wb") as f:
+    f.write(log_data)
+
+print("Log do servidor salvo.")
+disconnect_socket.close()
 # out.release()
 
 cv2.destroyAllWindows()

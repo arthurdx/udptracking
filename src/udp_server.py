@@ -2,13 +2,15 @@ import cv2
 import socket
 import struct
 import sys
-import threading
 from datetime import datetime
 from pythonjsonlogger import jsonlogger
 import logging
 import numpy as np
 from ultralytics import YOLO
 import psutil
+import time
+import os
+import threading
 
 def human_detected(frame):
     results = model(frame, imgsz=256, classes=[0])
@@ -23,6 +25,28 @@ def encode_and_send(frame, frame_id, timestamp, client_address):
     
     return size
 
+def listen_for_disconnect():
+    while True:
+        data, addr = disconnect_socket.recvfrom(1024)
+        if data == b"bye":
+            print(f"Cliente {addr} solicitou desconexão.")
+            send_video = False
+
+            time.sleep(1.0)
+
+            with open(log_filepath, "rb") as f:
+                while True:
+                    chunk = f.read(1024)
+                    if not chunk:
+                        break
+                    size_bytes = struct.pack("!I", len(chunk))
+                    disconnect_socket.sendto(size_bytes, addr)
+                    disconnect_socket.sendto(chunk, addr)
+            disconnect_socket.sendto(struct.pack("!I", 0), addr)
+
+            print("Log enviado. Encerrando servidor.")
+            os._exit(0)
+            
 
 
 MOVEMENT_THRESHOLD = 1.5
@@ -32,7 +56,10 @@ DETECTION_COOLDOWN = 60
 mask = DETECT_EVERY_N_FRAMES - 1
 cooldown_timer = 0
 
+send_video = True
+
 log_filename = datetime.now().strftime("./logs/server_%Y%m%d_%H%M%S.ndjson")
+log_filepath = log_filename
 
 logger = logging.getLogger("udp_server")
 logger.setLevel(logging.INFO)
@@ -63,9 +90,15 @@ frame_id = 0
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 server_socket.bind(("0.0.0.0", 9999))
 
+disconnect_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+disconnect_socket.bind(("0.0.0.0", 9998))
+
 print("Aguardando conexão do cliente...")
 _, client_address = server_socket.recvfrom(16)
 print(f"Cliente detectado: {client_address}")
+
+disconnect_thread = threading.Thread(target=listen_for_disconnect, daemon=True)
+disconnect_thread.start()
 
 
 video_capture = cv2.VideoCapture(path)  
@@ -80,6 +113,8 @@ was_processed = None
 detected_human = None
 
 while True:
+    if not send_video:
+        break
     ret, frame = video_capture.read()
     if not ret:
         logging.error("Falha ao capturar frame")
