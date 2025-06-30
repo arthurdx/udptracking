@@ -102,7 +102,7 @@ disconnect_thread.start()
 
 
 video_capture = cv2.VideoCapture(path)  
-video_capture.set(cv2.CAP_PROP_FPS, 24)
+video_capture.set(cv2.CAP_PROP_FPS, 10)
 video_capture.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
 video_capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 320)
 

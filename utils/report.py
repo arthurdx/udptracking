@@ -11,6 +11,8 @@ def read_log_file(filename: str) -> list:
             log_dict_list.append(line_dict)
     return log_dict_list
 
+
+
 def main():
     lost_frames = []
     total_byte_size = 0
@@ -24,23 +26,23 @@ def main():
             client_log = read_log_file(path_to_logs + filename)
         else:
             server_log = read_log_file(path_to_logs + filename)
-    latency =  -float(client_log[0]['latencyMs'])
+    latency =  0
+    total_sent = 0
     for server_frame in server_log:
-        if server_frame["was_sent"]:
+        if server_frame["sent"]:
+            total_sent += 1
             frame_id = server_frame['frame_id']
             total_byte_size += server_frame['size_bytes']
             found = any(frame['frame_id'] == frame_id for frame in client_log)
             if not found:
                 lost_frames.append(frame_id)
-    print(server_log[-1]['timestamp'])
-    print(server_log[0]['timestamp'])
-    print(server_log[-1]['timestamp'] - server_log[0]['timestamp'])
-    loss = (len(lost_frames) / len(client_log)) * 100
-    flow = (total_byte_size) / ((server_log[-1]['timestamp'] - server_log[0]['timestamp'])) * 0.008
+    loss = (len(lost_frames) / len(client_log))
+    throughput = (total_byte_size * 8) / (server_log[-1]['timestamp'] - server_log[0]['timestamp']) / 1000
     latency += sum(line["latencyMs"] for line in client_log) / len(client_log)
-    print(f"Total de patores perdidos {len(lost_frames)}\
+    print(f"Total de pacotes pelo servidor enviados {total_sent}\
+    \nTotal de pacotes perdidos {len(lost_frames)}\
     \nHouve uma perda de {loss:.3f}% dos pacotes\
-    \na vazão da rede foi de {flow:.3f}Kbps\
+    \na vazão da rede foi de {throughput:.3f}Kbps\
     \na latência média foi de {latency:.3f}ms")
 
     
